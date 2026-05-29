@@ -1,0 +1,13 @@
+# Ignore all Excel files
+*.xls
+*.xlsx
+*.xlsm
+*.xlsb
+*.xltx
+*.xltm
+
+# Ignore all Word documents
+*.doc
+
+Ignore all CSV files
+*.csv
