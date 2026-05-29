@@ -1,5 +1,7 @@
 import pandas as pd
 
+VALID_STATUSES = {"Active", "Inactive", "Maintenance", "Retired"}
+
 
 def update_inventory():
     #dataframes for scanned and manual assets
@@ -26,9 +28,16 @@ def update_inventory():
 
 def update_asset_status(asset_id, new_status):
     # Load the inventory
-    df = pd.read_csv("inventory.csv")
+    df = load_inventory()
+
+    if df is None:
+        return
 
     if asset_id in df["Asset ID"].values:
+
+        if new_status not in VALID_STATUSES:
+            print(f"Invalid status '{new_status}'. Please use one of the following: {', '.join(VALID_STATUSES)}")
+            return
 
         df.loc[df["Asset ID"] == asset_id, "status"] = new_status
 
@@ -40,14 +49,66 @@ def update_asset_status(asset_id, new_status):
         print(f"Asset ID {asset_id} not found in inventory.")
 
 
+def load_inventory():
+    # Load the inventory from the CSV file and return it as a DataFrame if it exists, otherwise return None
+    try:
+        df = pd.read_csv("inventory.csv")
+        print("Inventory loaded successfully.")
+        return df
+    except FileNotFoundError:
+        print("Inventory file not found. Please run update_inventory() first.")
+        return None
 
+
+
+
+##search funtions for assets by ID, person, location, and status
+def search_asset(asset_id):
+    df = load_inventory()
+    if df is None:
+        return None
+    result = df[df["Asset ID"] == asset_id]
+    if result.empty:
+        print(f"No asset found with ID {asset_id}.")
+    else:
+        print(result)
+
+def search_assets_by_person(person):
+    df = load_inventory()
+    if df is None:
+        return None
+    result = df[df["User"] == person]
+    if result.empty:
+        print(f"No assets found for person {person}, try entering the full name or check for typos.")
+    else:
+        print(result)
+
+def search_assets_by_location(location):
+    df = load_inventory()
+    if df is None:
+        return None
+    result = df[df["Location"] == location]
+    if result.empty:
+        print(f"No assets found at location {location}, try entering the full location or check for typos.")
+    else:
+        print(result)
+
+def search_assets_by_status(status):
+    df = load_inventory()
+    if df is None:
+        return None
+    result = df[df["status"] == status]
+    if result.empty:
+        print(f"No assets found with status {status}, try entering a valid status: {', '.join(VALID_STATUSES)}.")
+    else:
+        print(result)
 
 
 
 def main():
 
     # Example of updating an asset's status
-    update_asset_status("A002", "Inactive")
+    search_assets_by_status("Inactive")
 
 if __name__ == "__main__":
     main()
