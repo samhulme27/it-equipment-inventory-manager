@@ -1,6 +1,8 @@
 import pandas as pd
 import os
 
+from openpyxl import load_workbook
+
 # =========================
 # FOLDER SETUP
 # =========================
@@ -8,10 +10,12 @@ import os
 REPORTS_FOLDER = "reports"
 DATA_FOLDER = "data"
 
+# CSV reports from PowerShell app
 SCANNED_FILE = os.path.join(REPORTS_FOLDER, "scanned_assets.csv")
 MANUAL_FILE = os.path.join(REPORTS_FOLDER, "manual_assets.csv")
 
-INVENTORY_FILE = os.path.join(DATA_FOLDER, "inventory.csv")
+# Main Excel inventory file
+INVENTORY_FILE = os.path.join(DATA_FOLDER, "inventory.xlsx")
 
 # Create folders automatically
 os.makedirs(REPORTS_FOLDER, exist_ok=True)
@@ -34,18 +38,66 @@ VALID_STATUSES = {
 # =========================
 
 def save_inventory(df):
-    """Save inventory dataframe."""
-    df.to_csv(INVENTORY_FILE, index=False)
+    """
+    Save inventory while preserving:
+    - filters
+    - formatting
+    - tables
+    - column widths
+    - colors
+    """
+
+    # Create workbook if missing
+    if not os.path.exists(INVENTORY_FILE):
+
+        with pd.ExcelWriter(
+            INVENTORY_FILE,
+            engine="openpyxl"
+        ) as writer:
+
+            df.to_excel(
+                writer,
+                sheet_name="Assets",
+                index=False
+            )
+
+        return
+
+    # Load existing workbook
+    workbook = load_workbook(INVENTORY_FILE)
+
+    # Ensure Assets sheet exists
+    if "Assets" not in workbook.sheetnames:
+
+        sheet = workbook.create_sheet("Assets")
+
+        # Add headers
+        sheet.append(list(df.columns))
+
+    else:
+        sheet = workbook["Assets"]
+
+    # Delete old data rows only
+    if sheet.max_row > 1:
+        sheet.delete_rows(2, sheet.max_row)
+
+    # Write updated rows
+    for row in df.itertuples(index=False):
+
+        sheet.append(list(row))
+
+    # Save workbook
+    workbook.save(INVENTORY_FILE)
 
 
 def load_inventory():
-    """Load inventory dataframe."""
+    """Load inventory dataframe from Excel."""
 
     if not os.path.exists(INVENTORY_FILE):
         print("Inventory file not found.")
         return None
 
-    return pd.read_csv(INVENTORY_FILE)
+    return pd.read_excel(INVENTORY_FILE)
 
 
 # =========================
@@ -54,7 +106,7 @@ def load_inventory():
 
 def update_inventory():
 
-    # Load source CSV files, files from scanner results can be dropped into here
+    # Load CSV source files
     scanned_df = pd.read_csv(SCANNED_FILE)
     manual_df = pd.read_csv(MANUAL_FILE)
 
@@ -290,7 +342,6 @@ def retire_asset(asset_id):
 
 if __name__ == "__main__":
 
+    retire_asset(asset_id="A001")
     print("Inventory System Ready")
-    mark_asset_broken(asset_id= "A001")
-
 
