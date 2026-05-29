@@ -9,5 +9,8 @@
 # Ignore all Word documents
 *.doc
 
-Ignore all CSV files
+# Ignore all CSV files
 *.csv
+
+#ignore all PNG files
+*.png
