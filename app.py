@@ -3,6 +3,7 @@ import os
 
 from openpyxl import load_workbook
 from datetime import datetime
+from openpyxl.utils import get_column_letter
 
 # =========================
 # FOLDER SETUP
@@ -17,6 +18,7 @@ MANUAL_FILE = os.path.join(REPORTS_FOLDER, "manual_assets.csv")
 
 # Main Excel inventory file
 INVENTORY_FILE = os.path.join(DATA_FOLDER, "inventory.xlsx")
+REPORT_WORKBOOK = os.path.join(REPORTS_FOLDER, "asset_reports.xlsx")
 
 # Create folders automatically
 os.makedirs(REPORTS_FOLDER, exist_ok=True)
@@ -303,6 +305,8 @@ def update_inventory():
 
     print("Inventory updated successfully.")
 
+    pause()
+
 
 
 # =========================
@@ -350,10 +354,75 @@ def update_asset_status(asset_id, new_status):
 
     print(f"{asset_id} updated to {new_status}")
 
+    pause()
+
 
 # =========================
 # SEARCH FUNCTIONS
 # =========================
+
+def search_assets_by_serial(serial):
+
+    df = load_inventory()
+
+    if df is None:
+        return
+
+    result = df[df["SerialNumber"].astype(str).str.contains(
+        serial,
+        case=False,
+        na=False
+    )]
+
+    if result.empty:
+        print("No matching serial numbers found")
+    else:
+        print(result)
+
+    pause()
+
+
+def search_assets_by_asset_name(asset_name):
+
+    df = load_inventory()
+
+    if df is None:
+        return
+
+    result = df[df["AssetName"].astype(str).str.contains(
+        asset_name,
+        case=False,
+        na=False
+    )]
+
+    if result.empty:
+        print("No matching assets found")
+    else:
+        print(result)
+
+    pause()
+
+
+def search_assets_by_model(model):
+
+    df = load_inventory()
+
+    if df is None:
+        return
+
+    result = df[df["Model"].astype(str).str.contains(
+        model,
+        case=False,
+        na=False
+    )]
+
+    if result.empty:
+        print("No matching models found")
+    else:
+        print(result)
+
+    pause()
+
 
 def search_asset(asset_id):
 
@@ -368,6 +437,8 @@ def search_asset(asset_id):
         print(f"No asset found with ID {asset_id}")
     else:
         print(result)
+
+    pause()
 
 
 def search_assets_by_person(person):
@@ -384,6 +455,8 @@ def search_assets_by_person(person):
     else:
         print(result)
 
+    pause()
+
 
 def search_assets_by_location(location):
 
@@ -398,6 +471,8 @@ def search_assets_by_location(location):
         print(f"No assets found at {location}")
     else:
         print(result)
+    
+    pause()
 
 
 def search_assets_by_status(status):
@@ -413,6 +488,8 @@ def search_assets_by_status(status):
         print(f"No assets found with status {status}")
     else:
         print(result)
+
+    pause()
 
 
 # =========================
@@ -448,6 +525,8 @@ def issue_out_asset(asset_id, person, location):
     )
 
     print(f"{asset_id} issued to {person}")
+
+    pause()
 
 
 # =========================
@@ -487,6 +566,8 @@ def return_asset(asset_id):
 
     print(f"{asset_id} returned to IT Storage")
 
+    pause()
+
 
 # =========================
 # MARK AS BROKEN
@@ -520,6 +601,8 @@ def mark_asset_broken(asset_id):
     )
 
     print(f"{asset_id} marked as Broken")
+
+    pause()
 
 
 # =========================
@@ -555,6 +638,8 @@ def retire_asset(asset_id):
 
     print(f"{asset_id} retired")
 
+    pause()
+
 
 def generate_reports():
 
@@ -563,7 +648,18 @@ def generate_reports():
     if df is None:
         return
 
-    workbook = load_workbook(INVENTORY_FILE)
+    from openpyxl import Workbook
+
+    if os.path.exists(REPORT_WORKBOOK):
+
+        workbook = load_workbook(REPORT_WORKBOOK)
+
+    else:
+
+        workbook = Workbook()
+
+        if "Sheet" in workbook.sheetnames:
+            del workbook["Sheet"]
 
     report_sheets = [
 
@@ -571,11 +667,13 @@ def generate_reports():
         "Assigned Assets",
         "Broken Assets",
         "Returned Assets",
-        "IT Storage Assets"
+        "IT Storage Assets",
+        "User Assets"
 
     ]
 
     # Delete old report sheets
+
     for sheet_name in report_sheets:
 
         if sheet_name in workbook.sheetnames:
@@ -713,10 +811,196 @@ def generate_reports():
 
         storage_sheet.append(list(row))
 
-    workbook.save(INVENTORY_FILE)
+    # =====================
+    # USER ASSETS
+    # =====================
+
+    user_assets_df = df[
+        (df["User"].notna())
+        &
+        (df["User"] != "")
+    ]
+
+    user_assets_df = user_assets_df.sort_values(
+        by=["User", "AssetName"]
+    )
+
+    user_sheet = workbook.create_sheet(
+        "User Assets"
+    )
+
+    user_sheet.append(
+        list(user_assets_df.columns)
+    )
+
+    for row in user_assets_df.itertuples(index=False):
+
+        user_sheet.append(list(row))
+
+    # Add filters and freeze top row
+
+    for sheet in workbook.worksheets:
+
+        if sheet.max_row > 1:
+
+            sheet.auto_filter.ref = sheet.dimensions
+            sheet.freeze_panes = "A2"
+            sheet.protection.sheet = True
+            sheet.protection.autoFilter = False
+            sheet.protection.sort = False
+
+
+            for column in sheet.columns:
+                max_length = 0
+                column_letter = get_column_letter(column[0].column)
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                sheet.column_dimensions[column_letter].width = max_length + 2
+
+    workbook.save(REPORT_WORKBOOK)
 
     print("Reports generated successfully.")
 
+    pause()
+
+
+def menu():
+
+    while True:
+
+        print("\n===== IT Inventory Management System V1 =====")
+        print("1. Update Inventory")
+        print("2. Generate Reports")
+        print("3. Search Asset")
+        print("4. Issue Asset")
+        print("5. Return Asset")
+        print("6. Mark Asset Broken")
+        print("7. Retire Asset")
+        print("8. Exit")
+
+        choice = input("\nSelect option: ")
+
+        if choice == "1":
+
+            update_inventory()
+
+        elif choice == "2":
+
+            generate_reports()
+
+        elif choice == "3":
+
+            search_menu()
+
+        elif choice == "4":
+
+            asset_id = input("Asset ID: ")
+            person = input("User: ")
+            location = input("Location: ")
+
+            issue_out_asset(
+                asset_id,
+                person,
+                location
+            )
+
+        elif choice == "5":
+
+            asset_id = input("Asset ID: ")
+            return_asset(asset_id)
+
+        elif choice == "6":
+
+            asset_id = input("Asset ID: ")
+            mark_asset_broken(asset_id)
+
+        elif choice == "7":
+
+            asset_id = input("Asset ID: ")
+            retire_asset(asset_id)
+
+        elif choice == "8":
+
+            print("Goodbye")
+            break
+
+        else:
+
+            print("Invalid option")
+
+
+def search_menu():
+
+    while True:
+
+        print("\n=== Asset Search ===")
+        print("1. Asset ID")
+        print("2. User")
+        print("3. Location")
+        print("4. Status")
+        print("5. Serial Number")
+        print("6. Asset Name")
+        print("7. Model")
+        print("8. Back")
+
+        choice = input("Select option: ")
+
+        if choice == "1":
+
+            search_asset(
+                input("Asset ID: ")
+            )
+
+        elif choice == "2":
+
+            search_assets_by_person(
+                input("User: ")
+            )
+
+        elif choice == "3":
+
+            search_assets_by_location(
+                input("Location: ")
+            )
+
+        elif choice == "4":
+
+            search_assets_by_status(
+                input("Status: ")
+            )
+
+        elif choice == "5":
+
+            search_assets_by_serial(
+                input("Serial Number: ")
+            )
+
+        elif choice == "6":
+
+            search_assets_by_asset_name(
+                input("Asset Name: ")
+            )
+
+        elif choice == "7":
+
+            search_assets_by_model(
+                input("Model: ")
+            )
+
+        elif choice == "8":
+
+            break
+
+        else:
+
+            print("Invalid option")
+
+def pause():
+    input("\nPress Enter to continue...")
 
 
 
@@ -726,7 +1010,5 @@ def generate_reports():
 
 if __name__ == "__main__":
 
-    generate_reports()
-
-    print("Inventory System Ready")
+    menu()
 
