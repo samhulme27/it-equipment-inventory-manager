@@ -94,6 +94,71 @@ def save_inventory(df):
     # Save workbook
     workbook.save(INVENTORY_FILE)
 
+
+def add_asset_log(asset_id, log_type, notes):
+    if not os.path.exists(INVENTORY_FILE):
+        return
+    
+    workbook = load_workbook(INVENTORY_FILE)
+
+    if "Asset Logs" not in workbook.sheetnames:
+        log_sheet = workbook.create_sheet("Asset Logs")
+
+        log_sheet.append(["Timestamp", "Asset ID", "Asset Name", "Serial Number", "Log Type", "Notes"])
+    else:
+        log_sheet = workbook["Asset Logs"]
+
+    df = load_inventory()
+    asset_name = ""
+    serial_number = ""
+
+    if df is not None:
+        asset_row = df[df["Asset ID"] == asset_id]
+
+        if not asset_row.empty:
+            if "AssetName" in asset_row.columns:
+                asset_name = asset_row["AssetName"].iloc[0]
+            if "SerialNumber" in asset_row.columns:
+                serial_number = asset_row["SerialNumber"].iloc[0]
+
+    log_sheet.append([
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        asset_id,
+        asset_name,
+        serial_number,
+        log_type,
+        notes
+    ])
+    workbook.save(INVENTORY_FILE)
+
+    print(f"Log added for {asset_id}: {log_type} - {notes}")
+
+def view_asset_logs(asset_id):
+    if not os.path.exists(INVENTORY_FILE):
+        print("No logs found.")
+        return
+    workbook = load_workbook(INVENTORY_FILE)
+    if "Asset Logs" not in workbook.sheetnames:
+        print("No logs found.")
+        return
+    
+    log_sheet = workbook["Asset Logs"]
+    print(f"\nLogs for {asset_id}:\n")
+    found = False
+
+    for row in log_sheet.iter_rows(min_row=2, values_only=True):
+        timestamp, log_asset_id, log_asset_name, log_serial_number, log_type, notes = row
+
+        if str(log_asset_id) == str(asset_id):
+            print(f"{timestamp} - {log_type} - {notes}")
+            found = True
+
+    if not found:
+        print("No logs found.")
+
+    pause()
+
+
 def log_history(asset_id, old_status, new_status, user = ""):
     if not os.path.exists(INVENTORY_FILE):
         return
@@ -604,6 +669,8 @@ def mark_asset_broken(asset_id):
 
     df.loc[df["Asset ID"] == asset_id, "Status"] = "Broken"
 
+    fault_description = input("Enter fault description: ")
+
     save_inventory(df)
 
     log_history(
@@ -611,6 +678,12 @@ def mark_asset_broken(asset_id):
         old_status,
         "Broken", 
         current_user
+    )
+
+    add_asset_log(
+        asset_id,
+        "Fault Reported",
+        fault_description
     )
 
     print(f"{asset_id} marked as Broken")
@@ -682,6 +755,7 @@ def generate_reports():
         "Assigned Assets",
         "Broken Assets",
         "Returned Assets",
+        "Retired Assets",
         "IT Storage Assets",
         "User Assets"
 
@@ -807,6 +881,26 @@ def generate_reports():
         returned_sheet.append(list(row))
 
     # =====================
+    # RETIRED ASSETS
+    # =====================
+
+    retired_df = df[
+        df["Status"] == "Retired"
+    ]
+
+    retired_sheet = workbook.create_sheet(
+        "Retired Assets"
+    )
+
+    retired_sheet.append(
+        list(retired_df.columns)
+    )
+
+    for row in retired_df.itertuples(index=False):
+
+        retired_sheet.append(list(row))
+
+    # =====================
     # IT STORAGE
     # =====================
 
@@ -898,7 +992,8 @@ def menu():
         print("5. Return Asset")
         print("6. Mark Asset Broken")
         print("7. Retire Asset")
-        print("8. Exit")
+        print("8. View Asset Logs")
+        print("9. Exit")
 
         choice = input("\nSelect option: ")
 
@@ -943,6 +1038,10 @@ def menu():
 
         elif choice == "8":
 
+            asset_logs_menu()
+
+        elif choice == "9":
+
             print("Goodbye")
             break
 
@@ -954,6 +1053,8 @@ def menu():
 def search_menu():
 
     while True:
+
+        clear_screen()
 
         print("\n=== Asset Search ===")
         print("1. Asset ID")
@@ -1017,6 +1118,30 @@ def search_menu():
 
             print("Invalid option")
 
+def asset_logs_menu():
+    while True:
+        clear_screen()
+        print("\n=== View Asset Logs ===")
+        print("1. Add log entry")
+        print("2. View logs for asset")
+        print("3. Back")
+
+        choice = input("\nSelect option: ")
+
+        if choice == "1":
+            asset_id = input("Asset ID: ")
+            log_type = input("Log Type (e.g. Maintenance, Repair, Note): ")
+            notes = input("Notes: ")
+            add_asset_log(asset_id, log_type, notes)
+            pause()
+        elif choice == "2":
+            asset_id = input("Asset ID: ")
+            view_asset_logs(asset_id)
+        elif choice == "3":
+            break
+        else:
+            print("Invalid option")
+            pause()
 def pause():
     input("\nPress Enter to continue...")
 
@@ -1035,4 +1160,5 @@ def clear_screen():
 if __name__ == "__main__":
 
     menu()
-
+    
+    
