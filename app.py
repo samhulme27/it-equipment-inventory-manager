@@ -5,6 +5,8 @@ from openpyxl import load_workbook
 from datetime import datetime
 from openpyxl.utils import get_column_letter
 
+VERSION = "1.0"
+
 # =========================
 # FOLDER SETUP
 # =========================
@@ -306,6 +308,7 @@ def update_inventory():
     print("Inventory updated successfully.")
 
     pause()
+    clear_screen()
 
 
 
@@ -355,6 +358,7 @@ def update_asset_status(asset_id, new_status):
     print(f"{asset_id} updated to {new_status}")
 
     pause()
+    clear_screen()
 
 
 # =========================
@@ -380,6 +384,7 @@ def search_assets_by_serial(serial):
         print(result)
 
     pause()
+    clear_screen()
 
 
 def search_assets_by_asset_name(asset_name):
@@ -401,6 +406,7 @@ def search_assets_by_asset_name(asset_name):
         print(result)
 
     pause()
+    clear_screen()
 
 
 def search_assets_by_model(model):
@@ -422,6 +428,7 @@ def search_assets_by_model(model):
         print(result)
 
     pause()
+    clear_screen()
 
 
 def search_asset(asset_id):
@@ -439,6 +446,7 @@ def search_asset(asset_id):
         print(result)
 
     pause()
+    clear_screen()
 
 
 def search_assets_by_person(person):
@@ -456,6 +464,7 @@ def search_assets_by_person(person):
         print(result)
 
     pause()
+    clear_screen()
 
 
 def search_assets_by_location(location):
@@ -473,6 +482,7 @@ def search_assets_by_location(location):
         print(result)
     
     pause()
+    clear_screen()
 
 
 def search_assets_by_status(status):
@@ -490,6 +500,7 @@ def search_assets_by_status(status):
         print(result)
 
     pause()
+    clear_screen()
 
 
 # =========================
@@ -527,6 +538,7 @@ def issue_out_asset(asset_id, person, location):
     print(f"{asset_id} issued to {person}")
 
     pause()
+    clear_screen()
 
 
 # =========================
@@ -567,6 +579,7 @@ def return_asset(asset_id):
     print(f"{asset_id} returned to IT Storage")
 
     pause()
+    clear_screen()
 
 
 # =========================
@@ -603,6 +616,7 @@ def mark_asset_broken(asset_id):
     print(f"{asset_id} marked as Broken")
 
     pause()
+    clear_screen()
 
 
 # =========================
@@ -639,6 +653,7 @@ def retire_asset(asset_id):
     print(f"{asset_id} retired")
 
     pause()
+    clear_screen()
 
 
 def generate_reports():
@@ -866,13 +881,16 @@ def generate_reports():
     print("Reports generated successfully.")
 
     pause()
+    clear_screen()
 
 
 def menu():
 
     while True:
 
-        print("\n===== IT Inventory Management System V1 =====")
+        clear_screen()
+
+        print(f"\n===== IT Inventory Management System {VERSION} =====")
         print("1. Update Inventory")
         print("2. Generate Reports")
         print("3. Search Asset")
@@ -1001,6 +1019,12 @@ def search_menu():
 
 def pause():
     input("\nPress Enter to continue...")
+
+def clear_screen():
+
+    os.system(
+        "cls" if os.name == "nt" else "clear"
+    )
 
 
 
