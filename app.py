@@ -95,6 +95,55 @@ def save_inventory(df):
     workbook.save(INVENTORY_FILE)
 
 
+def repair_asset(asset_id):
+
+    df = load_inventory()
+
+    if df is None:
+        return
+    
+    if asset_id not in df["Asset ID"].values:
+
+        print("Asset not found")
+        return
+    
+    current_status = df.loc[df["Asset ID"] == asset_id, "Status"].iloc[0]
+    if current_status != "Broken":
+
+        print(f"Asset {asset_id} is not marked as Broken, only Broken assets can be repaired.")
+        pause()
+        return
+    
+    repair_notes = input("Enter repair notes: ")
+
+    old_status = df.loc[df["Asset ID"] == asset_id, "Status"].iloc[0]
+
+    current_user = ""
+
+    if "User" in df.columns:
+
+        current_user = df.loc[df["Asset ID"] == asset_id, "User"].iloc[0]
+
+        df.loc[df["Asset ID"] == asset_id, "Status"] = "Active"
+
+        save_inventory(df)
+
+        log_history(
+            asset_id,
+            old_status,
+            "Active",
+            current_user)
+        
+        add_asset_log(
+            asset_id,
+            "Repaired",
+            repair_notes)
+        
+        print(f"{asset_id} repaired and set to Active")
+        
+        pause()
+
+
 def add_asset_log(asset_id, log_type, notes):
     if not os.path.exists(INVENTORY_FILE):
         return
@@ -993,7 +1042,8 @@ def menu():
         print("6. Mark Asset Broken")
         print("7. Retire Asset")
         print("8. View Asset Logs")
-        print("9. Exit")
+        print("9. Repair Asset")
+        print("10. Exit")
 
         choice = input("\nSelect option: ")
 
@@ -1041,6 +1091,11 @@ def menu():
             asset_logs_menu()
 
         elif choice == "9":
+
+            asset_id = input("Asset ID: ")
+            repair_asset(asset_id)
+
+        elif choice == "10":
 
             print("Goodbye")
             break
