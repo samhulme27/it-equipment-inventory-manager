@@ -5,7 +5,8 @@ from openpyxl import load_workbook
 from datetime import datetime
 from openpyxl.utils import get_column_letter
 
-VERSION = "1.0"
+
+VERSION = "1.3"
 
 # =========================
 # FOLDER SETUP
@@ -101,47 +102,54 @@ def repair_asset(asset_id):
 
     if df is None:
         return
-    
-    if asset_id not in df["Asset ID"].values:
+
+    asset_id = str(asset_id).strip()
+    match = (df["Asset ID"].astype(str).str.strip() == asset_id)
+
+    if not match.any():
 
         print("Asset not found")
+        pause()
         return
-    
-    current_status = df.loc[df["Asset ID"] == asset_id, "Status"].iloc[0]
+
+    current_status = df.loc[match, "Status"].iloc[0]
+
     if current_status != "Broken":
 
         print(f"Asset {asset_id} is not marked as Broken, only Broken assets can be repaired.")
         pause()
         return
-    
+
     repair_notes = input("Enter repair notes: ")
 
-    old_status = df.loc[df["Asset ID"] == asset_id, "Status"].iloc[0]
+    old_status = current_status
 
     current_user = ""
 
     if "User" in df.columns:
+        current_user = df.loc[match, "User"].iloc[0]
 
-        current_user = df.loc[df["Asset ID"] == asset_id, "User"].iloc[0]
+    df.loc[match, "Status"] = "Active"
 
-        df.loc[df["Asset ID"] == asset_id, "Status"] = "Active"
+    save_inventory(df)
 
-        save_inventory(df)
+    log_history(
+        asset_id,
+        old_status,
+        "Active",
+        current_user
+    )
 
-        log_history(
-            asset_id,
-            old_status,
-            "Active",
-            current_user)
-        
-        add_asset_log(
-            asset_id,
-            "Repaired",
-            repair_notes)
-        
-        print(f"{asset_id} repaired and set to Active")
-        
-        pause()
+    add_asset_log(
+        asset_id,
+        "Repaired",
+        repair_notes
+    )
+
+    print(f"{asset_id} repaired and set to Active")
+
+    pause()
+
 
 
 def add_asset_log(asset_id, log_type, notes):
@@ -246,52 +254,43 @@ def load_inventory():
 # CREATE / UPDATE INVENTORY
 # =========================
 
+
+
 def find_asset_match(inventory_df, asset):
 
-    # Match by Serial Number
-    if (
-        "SerialNumber" in inventory_df.columns
-        and pd.notna(asset.get("SerialNumber"))
-        and str(asset.get("SerialNumber")).strip() != ""
-    ):
+    asset_id = str(asset.get("Asset ID", "")).strip()
+    serial = str(asset.get("SerialNumber", "")).strip()
+    mac = str(asset.get("MACAddress", "")).strip()
 
+    # Match by Asset ID
+    if asset_id:
         matches = inventory_df[
-            inventory_df["SerialNumber"] == asset["SerialNumber"]
+            inventory_df["Asset ID"].astype(str).str.strip() == asset_id
         ]
+        if not matches.empty:
+            return matches.index[0]
 
+    # Match by Serial Number
+    if serial and serial != "N/A":
+        matches = inventory_df[
+            inventory_df["SerialNumber"].astype(str).str.strip() == serial
+        ]
         if not matches.empty:
             return matches.index[0]
 
     # Match by MAC Address
-    if (
-        "MACAddress" in inventory_df.columns
-        and pd.notna(asset.get("MACAddress"))
-        and str(asset.get("MACAddress")).strip() != ""
-    ):
-
+    if mac:
         matches = inventory_df[
-            inventory_df["MACAddress"] == asset["MACAddress"]
+            inventory_df["MACAddress"].astype(str).str.strip() == mac
         ]
-
-        if not matches.empty:
-            return matches.index[0]
-
-    # Match by Asset Name + Model
-    if (
-        "AssetName" in inventory_df.columns
-        and "Model" in inventory_df.columns
-    ):
-
-        matches = inventory_df[
-            (inventory_df["AssetName"] == asset.get("AssetName"))
-            &
-            (inventory_df["Model"] == asset.get("Model"))
-        ]
-
         if not matches.empty:
             return matches.index[0]
 
     return None
+
+
+
+
 
 
 
@@ -313,6 +312,7 @@ def update_inventory():
     if inventory_df is None:
 
         inventory_df = pd.DataFrame()
+
 
     # Process imported assets
     for _, asset in import_df.iterrows():
@@ -380,42 +380,7 @@ def update_inventory():
     if "Asset ID" not in inventory_df.columns:
         inventory_df["Asset ID"] = ""
 
-    # Find highest Asset ID
-    highest_id = 0
-
-    for asset_id in inventory_df["Asset ID"]:
-
-        if pd.notna(asset_id):
-
-            asset_id = str(asset_id).strip()
-
-            if asset_id.startswith("A"):
-
-                try:
-
-                    number = int(asset_id[1:])
-
-                    if number > highest_id:
-                        highest_id = number
-
-                except ValueError:
-                    pass
-
-    # Generate IDs only for blank assets
-    for index in inventory_df.index:
-
-        current_id = str(
-            inventory_df.at[index, "Asset ID"]
-        ).strip()
-
-        if current_id == "" or current_id.lower() == "nan":
-
-            highest_id += 1
-
-            inventory_df.at[
-                index,
-                "Asset ID"
-            ] = f"A{str(highest_id).zfill(3)}"
+    
 
     save_inventory(inventory_df)
 
@@ -434,10 +399,10 @@ def update_asset_status(asset_id, new_status):
 
     df = load_inventory()
 
-    current_user = ""
-
     if df is None:
         return
+
+    current_user = ""
 
     if new_status not in VALID_STATUSES:
 
@@ -448,23 +413,30 @@ def update_asset_status(asset_id, new_status):
 
         return
 
-    if asset_id not in df["Asset ID"].values:
+    asset_id = str(asset_id).strip()
+
+    match = (
+        df["Asset ID"].astype(str).str.strip() == asset_id
+    )
+
+    if not match.any():
 
         print(f"Asset ID {asset_id} not found.")
+        pause()
         return
 
-    old_status = df.loc[df["Asset ID"] == asset_id, "Status"].iloc[0]
+    old_status = df.loc[match, "Status"].iloc[0]
 
     if "User" in df.columns:
-        current_user = df.loc[df["Asset ID"] == asset_id, "User"].iloc[0]
+        current_user = df.loc[match, "User"].iloc[0]
 
-    df.loc[df["Asset ID"] == asset_id, "Status"] = new_status
+    df.loc[match, "Status"] = new_status
 
     save_inventory(df)
 
     log_history(
-        asset_id, 
-        old_status, 
+        asset_id,
+        old_status,
         new_status,
         current_user
     )
@@ -473,6 +445,7 @@ def update_asset_status(asset_id, new_status):
 
     pause()
     clear_screen()
+
 
 
 # =========================
@@ -523,6 +496,28 @@ def search_assets_by_asset_name(asset_name):
     clear_screen()
 
 
+def search_assets_by_asset_type(asset_type):
+
+    df = load_inventory()
+
+    if df is None:
+        return
+
+    result = df[df["AssetType"].astype(str).str.contains(
+        asset_type,
+        case=False,
+        na=False
+    )]
+
+    if result.empty:
+        print("No matching asset types found")
+    else:
+        print(result)
+
+    pause()
+    clear_screen()
+
+
 def search_assets_by_model(model):
 
     df = load_inventory()
@@ -552,7 +547,7 @@ def search_asset(asset_id):
     if df is None:
         return
 
-    result = df[df["Asset ID"] == asset_id]
+    result = df[df["Asset ID"].astype(str).str.strip() == str(asset_id).strip()]
 
     if result.empty:
         print(f"No asset found with ID {asset_id}")
@@ -570,7 +565,11 @@ def search_assets_by_person(person):
     if df is None:
         return
 
-    result = df[df["User"] == person]
+    result = df[df["User"].astype(str).str.contains(
+        person,
+        case=False,
+        na=False
+    )]
 
     if result.empty:
         print(f"No assets found for {person}")
@@ -588,7 +587,11 @@ def search_assets_by_location(location):
     if df is None:
         return
 
-    result = df[df["Location"] == location]
+    result = df[df["Location"].astype(str).str.contains(
+        location,
+        case=False,
+        na=False
+    )]
 
     if result.empty:
         print(f"No assets found at {location}")
@@ -606,7 +609,11 @@ def search_assets_by_status(status):
     if df is None:
         return
 
-    result = df[df["Status"] == status]
+    result = df[df["Status"].astype(str).str.contains(
+        status,
+        case=False,
+        na=False
+    )]
 
     if result.empty:
         print(f"No assets found with status {status}")
@@ -628,18 +635,21 @@ def issue_out_asset(asset_id, person, location):
     if df is None:
         return
 
-    if asset_id not in df["Asset ID"].values:
+    asset_id = str(asset_id).strip()
+    match = df["Asset ID"].astype(str).str.strip() == asset_id
 
+    if not match.any():
         print("Asset not found")
+        pause()
         return
-    
-    old_status = df.loc[df["Asset ID"] == asset_id, "Status"].iloc[0]
 
-    df.loc[df["Asset ID"] == asset_id, "Status"] = "Active"
+    old_status = df.loc[match, "Status"].iloc[0]
 
-    df.loc[df["Asset ID"] == asset_id, "User"] = person
+    df.loc[match, "Status"] = "Active"
 
-    df.loc[df["Asset ID"] == asset_id, "Location"] = location
+    df.loc[match, "User"] = person
+
+    df.loc[match, "Location"] = location
 
     save_inventory(df)
 
@@ -666,20 +676,23 @@ def return_asset(asset_id):
     if df is None:
         return
 
-    if asset_id not in df["Asset ID"].values:
+    asset_id = str(asset_id).strip()
+    match = df["Asset ID"].astype(str).str.strip() == asset_id
 
+    if not match.any():
         print("Asset not found")
+        pause()
         return
     
-    old_status = df.loc[df["Asset ID"] == asset_id, "Status"].iloc[0]
+    old_status = df.loc[match, "Status"].iloc[0]
 
-    df.loc[df["Asset ID"] == asset_id, "Status"] = "Returned"
+    current_user = df.loc[match, "User"].iloc[0]
 
-    current_user = df.loc[df["Asset ID"] == asset_id, "User"].iloc[0]
+    df.loc[match, "Status"] = "Returned"
 
-    df.loc[df["Asset ID"] == asset_id, "User"] = ""
+    df.loc[match, "User"] = ""
 
-    df.loc[df["Asset ID"] == asset_id, "Location"] = "IT Storage"
+    df.loc[match, "Location"] = "IT Storage"
 
     save_inventory(df)
 
@@ -707,16 +720,19 @@ def mark_asset_broken(asset_id):
     if df is None:
         return
 
-    if asset_id not in df["Asset ID"].values:
+    asset_id = str(asset_id).strip()
+    match = df["Asset ID"].astype(str).str.strip() == asset_id
 
+    if not match.any():
         print("Asset not found")
+        pause()
         return
-    
-    old_status = df.loc[df["Asset ID"] == asset_id, "Status"].iloc[0]
 
-    current_user = df.loc[df["Asset ID"] == asset_id, "User"].iloc[0]
+    old_status = df.loc[match, "Status"].iloc[0]
 
-    df.loc[df["Asset ID"] == asset_id, "Status"] = "Broken"
+    current_user = df.loc[match, "User"].iloc[0]
+
+    df.loc[match, "Status"] = "Broken"
 
     fault_description = input("Enter fault description: ")
 
@@ -752,16 +768,19 @@ def retire_asset(asset_id):
     if df is None:
         return
 
-    if asset_id not in df["Asset ID"].values:
+    asset_id = str(asset_id).strip()
+    match = df["Asset ID"].astype(str).str.strip() == asset_id
 
+    if not match.any():
         print("Asset not found")
+        pause()
         return
     
-    old_status = df.loc[df["Asset ID"] == asset_id, "Status"].iloc[0]
+    old_status = df.loc[match, "Status"].iloc[0]
 
-    current_user = df.loc[df["Asset ID"] == asset_id, "User"].iloc[0]
+    current_user = df.loc[match, "User"].iloc[0]
 
-    df.loc[df["Asset ID"] == asset_id, "Status"] = "Retired"
+    df.loc[match, "Status"] = "Retired"
 
     save_inventory(df)
 
@@ -1119,7 +1138,8 @@ def search_menu():
         print("5. Serial Number")
         print("6. Asset Name")
         print("7. Model")
-        print("8. Back")
+        print("8. Asset Type")
+        print("9. Back")
 
         choice = input("Select option: ")
 
@@ -1167,6 +1187,12 @@ def search_menu():
 
         elif choice == "8":
 
+            search_assets_by_asset_type(
+                input("Asset Type: ")
+            )
+
+        elif choice == "9":
+
             break
 
         else:
@@ -1213,7 +1239,4 @@ def clear_screen():
 # =========================
 
 if __name__ == "__main__":
-
     menu()
-    
-    
