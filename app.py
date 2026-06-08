@@ -6,7 +6,7 @@ from datetime import datetime
 from openpyxl.utils import get_column_letter
 
 
-VERSION = "1.3"
+VERSION = "1.4"
 
 # =========================
 # FOLDER SETUP
@@ -332,9 +332,6 @@ def update_inventory():
             fields_to_update = [
 
                 "AssetName",
-                "User",
-                "Location",
-                "Date",
                 "AssetType",
                 "Model",
                 "SerialNumber",
@@ -468,7 +465,17 @@ def search_assets_by_serial(serial):
     if result.empty:
         print("No matching serial numbers found")
     else:
-        print(result)
+        for _, row in result.iterrows():
+            print("=" * 50)
+            print(f"Asset ID: {row['Asset ID']}") 
+            print(f"Asset Name: {row['AssetName']}")
+            print(f"Serial Number: {row['SerialNumber']}")
+            print(f"Asset Type: {row['AssetType']}")
+            print(f"Model: {row['Model']}")
+            print(f"Status: {row['Status']}")
+            print(f"User: {row['User']}")
+            print(f"Location: {row['Location']}")
+            print("=" * 50)
 
     pause()
     clear_screen()
@@ -490,7 +497,17 @@ def search_assets_by_asset_name(asset_name):
     if result.empty:
         print("No matching assets found")
     else:
-        print(result)
+        for _, row in result.iterrows():
+            print("=" * 50)
+            print(f"Asset ID: {row['Asset ID']}") 
+            print(f"Asset Name: {row['AssetName']}")
+            print(f"Serial Number: {row['SerialNumber']}")
+            print(f"Asset Type: {row['AssetType']}")
+            print(f"Model: {row['Model']}")
+            print(f"Status: {row['Status']}")
+            print(f"User: {row['User']}")
+            print(f"Location: {row['Location']}")
+            print("=" * 50)
 
     pause()
     clear_screen()
@@ -512,8 +529,17 @@ def search_assets_by_asset_type(asset_type):
     if result.empty:
         print("No matching asset types found")
     else:
-        print(result)
-
+        for _, row in result.iterrows():
+            print("=" * 50)
+            print(f"Asset ID: {row['Asset ID']}") 
+            print(f"Asset Name: {row['AssetName']}")
+            print(f"Serial Number: {row['SerialNumber']}")
+            print(f"Asset Type: {row['AssetType']}")
+            print(f"Model: {row['Model']}")
+            print(f"Status: {row['Status']}")
+            print(f"User: {row['User']}")
+            print(f"Location: {row['Location']}")
+            print("=" * 50)
     pause()
     clear_screen()
 
@@ -534,7 +560,17 @@ def search_assets_by_model(model):
     if result.empty:
         print("No matching models found")
     else:
-        print(result)
+        print("=" * 50)
+        for _, row in result.iterrows():
+            print(f"Asset ID: {row['Asset ID']}") 
+            print(f"Asset Name: {row['AssetName']}")
+            print(f"Serial Number: {row['SerialNumber']}")
+            print(f"Asset Type: {row['AssetType']}")
+            print(f"Model: {row['Model']}")
+            print(f"Status: {row['Status']}")
+            print(f"User: {row['User']}")
+            print(f"Location: {row['Location']}")
+            print("=" * 50)
 
     pause()
     clear_screen()
@@ -552,7 +588,17 @@ def search_asset(asset_id):
     if result.empty:
         print(f"No asset found with ID {asset_id}")
     else:
-        print(result)
+        print("=" * 50)
+        for _, row in result.iterrows():
+            print(f"Asset ID: {row['Asset ID']}") 
+            print(f"Asset Name: {row['AssetName']}")
+            print(f"Serial Number: {row['SerialNumber']}")
+            print(f"Asset Type: {row['AssetType']}")
+            print(f"Model: {row['Model']}")
+            print(f"Status: {row['Status']}")
+            print(f"User: {row['User']}")
+            print(f"Location: {row['Location']}")
+            print("=" * 50)
 
     pause()
     clear_screen()
@@ -574,7 +620,17 @@ def search_assets_by_person(person):
     if result.empty:
         print(f"No assets found for {person}")
     else:
-        print(result)
+        print("=" * 50)
+        for _, row in result.iterrows():
+            print(f"Asset ID: {row['Asset ID']}") 
+            print(f"Asset Name: {row['AssetName']}")
+            print(f"Serial Number: {row['SerialNumber']}")
+            print(f"Asset Type: {row['AssetType']}")
+            print(f"Model: {row['Model']}")
+            print(f"Status: {row['Status']}")
+            print(f"User: {row['User']}")
+            print(f"Location: {row['Location']}")
+            print("=" * 50)
 
     pause()
     clear_screen()
@@ -596,8 +652,18 @@ def search_assets_by_location(location):
     if result.empty:
         print(f"No assets found at {location}")
     else:
-        print(result)
-    
+        print("=" * 50)
+        for _, row in result.iterrows():
+            print(f"Asset ID: {row['Asset ID']}") 
+            print(f"Asset Name: {row['AssetName']}")
+            print(f"Serial Number: {row['SerialNumber']}")
+            print(f"Asset Type: {row['AssetType']}")
+            print(f"Model: {row['Model']}")
+            print(f"Status: {row['Status']}")
+            print(f"User: {row['User']}")
+            print(f"Location: {row['Location']}")
+            print("=" * 50)
+
     pause()
     clear_screen()
 
@@ -618,7 +684,17 @@ def search_assets_by_status(status):
     if result.empty:
         print(f"No assets found with status {status}")
     else:
-        print(result)
+        print("=" * 50)
+        for _, row in result.iterrows():
+            print(f"Asset ID: {row['Asset ID']}") 
+            print(f"Asset Name: {row['AssetName']}")
+            print(f"Serial Number: {row['SerialNumber']}")
+            print(f"Asset Type: {row['AssetType']}")
+            print(f"Model: {row['Model']}")
+            print(f"Status: {row['Status']}")
+            print(f"User: {row['User']}")
+            print(f"Location: {row['Location']}")
+            print("=" * 50)
 
     pause()
     clear_screen()
@@ -1051,18 +1127,19 @@ def menu():
     while True:
 
         clear_screen()
+        show_dashboard()
 
-        print(f"\n===== IT Inventory Management System {VERSION} =====")
-        print("1. Update Inventory")
-        print("2. Generate Reports")
-        print("3. Search Asset")
-        print("4. Issue Asset")
-        print("5. Return Asset")
-        print("6. Mark Asset Broken")
-        print("7. Retire Asset")
-        print("8. View Asset Logs")
-        print("9. Repair Asset")
-        print("10. Exit")
+        print("[1.] Update Inventory")
+        print("[2.] Generate Reports")
+        print("[3.] Search Asset")
+        print("[4.] Issue Asset")
+        print("[5.] Return Asset")
+        print("[6.] Mark Asset Broken")
+        print("[7.] Retire Asset")
+        print("[8.] View Asset Logs")
+        print("[9.] Repair Asset")
+        print("[10.] Exit")
+        print("=" * 50)
 
         choice = input("\nSelect option: ")
 
@@ -1129,17 +1206,21 @@ def search_menu():
     while True:
 
         clear_screen()
+        show_dashboard()
+        
+        print("\n===== Asset Search =====")
+        print("=" * 50)
 
-        print("\n=== Asset Search ===")
-        print("1. Asset ID")
-        print("2. User")
-        print("3. Location")
-        print("4. Status")
-        print("5. Serial Number")
-        print("6. Asset Name")
-        print("7. Model")
-        print("8. Asset Type")
-        print("9. Back")
+        print("[1.] Asset ID")
+        print("[2.] User")
+        print("[3.] Location")
+        print("[4.] Status")
+        print("[5.] Serial Number")
+        print("[6.] Asset Name")
+        print("[7.] Model")
+        print("[8.] Asset Type")
+        print("[9.] Back")
+        print("=" * 50)
 
         choice = input("Select option: ")
 
@@ -1202,10 +1283,14 @@ def search_menu():
 def asset_logs_menu():
     while True:
         clear_screen()
-        print("\n=== View Asset Logs ===")
-        print("1. Add log entry")
-        print("2. View logs for asset")
-        print("3. Back")
+        show_dashboard()
+        
+        print("=" * 50)
+        print("\n===== View Asset Logs =====")
+        print("[1.] Add log entry")
+        print("[2.] View logs for asset")
+        print("[3.] Back")
+        print("=" * 50)
 
         choice = input("\nSelect option: ")
 
@@ -1231,6 +1316,30 @@ def clear_screen():
     os.system(
         "cls" if os.name == "nt" else "clear"
     )
+
+def show_dashboard():
+
+    df = load_inventory()
+
+    if df is None:
+        print("No inventory data found.")
+        return
+    
+    total_assets = len(df)
+    active_assets = len(df[df["Status"] == "Active"])
+    returned_assets = len(df[df["Status"] == "Returned"])
+    broken_assets = len(df[df["Status"] == "Broken"])
+    retired_assets = len(df[df["Status"] == "Retired"])
+
+    print("=" * 50)
+    print(f"\n===== IT Inventory Management System {VERSION} =====")
+    print("=" * 50)
+    print(f"Total Assets: {total_assets}")
+    print(f"Active Assets: {active_assets}")
+    print(f"Returned Assets: {returned_assets}")
+    print(f"Broken Assets: {broken_assets}")
+    print(f"Retired Assets: {retired_assets}")
+    print("=" * 50)
 
 
 
