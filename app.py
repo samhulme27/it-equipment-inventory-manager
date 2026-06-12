@@ -296,6 +296,10 @@ def find_asset_match(inventory_df, asset):
 
 def update_inventory():
 
+    matches_found = 0
+    new_assets = 0
+
+
     # Load CSV source files
     scanned_df = pd.read_csv(SCANNED_FILE)
     manual_df = pd.read_csv(MANUAL_FILE)
@@ -305,6 +309,12 @@ def update_inventory():
         [scanned_df, manual_df],
         ignore_index=True
     )
+
+    print("scanned:", len(scanned_df))
+    print("manual:", len(manual_df))
+    print("total to import:", len(import_df))
+
+    print("Unique Asset IDs in import:", import_df["Asset ID"].astype(str).str.strip().nunique())
 
     # Load existing inventory
     inventory_df = load_inventory()
@@ -325,6 +335,16 @@ def update_inventory():
                 inventory_df,
                 asset
             )
+
+        asset_id = str(asset.get("Asset ID", "")).strip()
+
+        if match_index is not None:
+
+            print(f"matched: {asset_id}")
+            matches_found += 1
+
+        else:
+            new_assets += 1
 
         # Existing asset found
         if match_index is not None:
@@ -377,7 +397,18 @@ def update_inventory():
     if "Asset ID" not in inventory_df.columns:
         inventory_df["Asset ID"] = ""
 
-    
+    print("inventory rows:", len(inventory_df))
+    print(f"Matches found: {matches_found}")
+    print(f"New assets added: {new_assets}")
+
+    import_ids = set(import_df["Asset ID"].astype(str))
+    inventory_ids = set(inventory_df["Asset ID"].astype(str))
+
+    missing = import_ids - inventory_ids
+
+    print("Missing IDs:")
+    print(sorted(missing))
+                     
 
     save_inventory(inventory_df)
 
@@ -719,26 +750,44 @@ def issue_out_asset(asset_id, person, location):
         pause()
         return
 
-    old_status = df.loc[match, "Status"].iloc[0]
+    if match.sum() > 1:
+        print("Error: Duplicate Asset IDs found")
+        pause()
+        return
+
+    current_status = str(df.loc[match, "Status"].iloc[0]).strip()
+    current_user = str(df.loc[match, "User"].iloc[0]).strip()
+
+    if current_user and current_user.lower() != "nan":
+        print(f"Asset already issued to {current_user}")
+        pause()
+        return
+
+    if current_status in {"Broken", "Retired"}:
+        print(f"Cannot issue asset because status is {current_status}")
+        pause()
+        return
+
+    old_status = current_status
 
     df.loc[match, "Status"] = "Active"
-
     df.loc[match, "User"] = person
-
     df.loc[match, "Location"] = location
 
     save_inventory(df)
 
-    log_history(asset_id,
-                old_status, 
-                "Issued Out",
-                person
+    log_history(
+        asset_id,
+        old_status,
+        "Issued Out",
+        person
     )
 
     print(f"{asset_id} issued to {person}")
 
     pause()
     clear_screen()
+
 
 
 # =========================
@@ -1284,7 +1333,7 @@ def asset_logs_menu():
     while True:
         clear_screen()
         show_dashboard()
-        
+
         print("=" * 50)
         print("\n===== View Asset Logs =====")
         print("[1.] Add log entry")
@@ -1327,6 +1376,7 @@ def show_dashboard():
     
     total_assets = len(df)
     active_assets = len(df[df["Status"] == "Active"])
+    assets_in_storage = len(df[df["Location"] == "IT Storage"])
     returned_assets = len(df[df["Status"] == "Returned"])
     broken_assets = len(df[df["Status"] == "Broken"])
     retired_assets = len(df[df["Status"] == "Retired"])
@@ -1336,6 +1386,7 @@ def show_dashboard():
     print("=" * 50)
     print(f"Total Assets: {total_assets}")
     print(f"Active Assets: {active_assets}")
+    print(f"Assets in Storage: {assets_in_storage}")
     print(f"Returned Assets: {returned_assets}")
     print(f"Broken Assets: {broken_assets}")
     print(f"Retired Assets: {retired_assets}")
