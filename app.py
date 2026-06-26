@@ -1,12 +1,17 @@
 import pandas as pd
 import os
+import win32com.client as win32
 
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
 from datetime import datetime
 from openpyxl.utils import get_column_letter
 
+import calendar
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 
-VERSION = "1.4"
+
+VERSION = "1.6"
 
 # =========================
 # FOLDER SETUP
@@ -14,6 +19,7 @@ VERSION = "1.4"
 
 REPORTS_FOLDER = "reports"
 DATA_FOLDER = "data"
+REPORT_EXPORTS_FOLDER = "reports exports"
 
 # CSV reports from PowerShell app
 SCANNED_FILE = os.path.join(REPORTS_FOLDER, "scanned_assets.csv")
@@ -26,6 +32,7 @@ REPORT_WORKBOOK = os.path.join(REPORTS_FOLDER, "asset_reports.xlsx")
 # Create folders automatically
 os.makedirs(REPORTS_FOLDER, exist_ok=True)
 os.makedirs(DATA_FOLDER, exist_ok=True)
+os.makedirs(REPORT_EXPORTS_FOLDER, exist_ok=True)
 
 # =========================
 # VALID STATUSES
@@ -39,6 +46,24 @@ VALID_STATUSES = {
     "Retired"
 }
 
+
+def send_email_asset_issue(user_email, user_name, asset_id, asset_name, asset_model, shared_email, asset_type):
+    outlook = win32.Dispatch('outlook.application')
+    mail = outlook.CreateItem(0)
+    mail.To = user_email
+    mail.CC = shared_email
+    mail.Subject = f"Asset Issued: {asset_type}, {asset_name} {asset_model}"
+    mail.Body = f"Hi {user_name},\n\nYou have been issued the following asset:\n\nAsset ID: {asset_id}\nAsset Name: {asset_name}\nAsset Model: {asset_model}\nAsset Type: {asset_type}\n\nPlease contact IT if you have any issues.\n\nKind regards,\nIT Department"
+    mail.Send()
+
+def send_email_asset_return(user_email, user_name, asset_id, asset_name, asset_model, shared_email, asset_type):
+    outlook = win32.Dispatch('outlook.application')
+    mail = outlook.CreateItem(0)
+    mail.To = user_email
+    mail.CC = shared_email
+    mail.Subject = f"Asset Returned: {asset_type}, {asset_name} {asset_model}"
+    mail.Body = f"Hi {user_name},\n\nYou have returned the following asset:\n\nAsset ID: {asset_id}\nAsset Name: {asset_name}\nAsset Model: {asset_model}\nAsset Type: {asset_type}\n\nThank you for returning the asset.\n\nKind regards,\nIT Department"
+    mail.Send()
 # =========================
 # SAVE / LOAD FUNCTIONS
 # =========================
@@ -125,6 +150,7 @@ def repair_asset(asset_id):
     old_status = current_status
 
     current_user = ""
+    
 
     if "User" in df.columns:
         current_user = df.loc[match, "User"].iloc[0]
@@ -215,8 +241,48 @@ def view_asset_logs(asset_id):
 
     pause()
 
+def monthly_summary_report():
+    try:
+        month = int(input("Enter month (1-12): ").strip())
+        year = int(input("Enter year (e.g., 2024): ").strip())
+    except ValueError:
+        print("Invalid month or year")
+        pause()
+        return
+    
+    history = pd.read_excel(INVENTORY_FILE, sheet_name="History")
 
-def log_history(asset_id, old_status, new_status, user = ""):
+    history['Timestamp'] = pd.to_datetime(history['Timestamp'], errors='coerce')
+    
+    report = history[(history['Timestamp'].dt.month == month) & (history['Timestamp'].dt.year == year)]
+    
+    if report.empty:
+        print(f"No history found for {month}/{year}")
+        pause()
+        return
+    
+    issued = (report['New Status'] == 'Issued Out').sum()
+    returned = (report['New Status'] == 'Returned').sum()
+    broken = (report['New Status'] == 'Broken').sum()
+    retired = (report['New Status'] == 'Retired').sum()
+
+    print(f"\nMonthly Summary for {month}/{year}:")
+    print(f"Issued Out: {issued}")
+    print(f"Returned: {returned}")
+    print(f"Broken: {broken}")
+    print(f"Retired: {retired}")
+    
+    print("\nDetailed Changes:")
+    print(report[['Timestamp', 'Asset ID', 'Old Status', 'New Status', 'User', 'Email']].to_string(index=False))
+
+    save_pdf = input("Export as PDF? (y/n): ").strip().lower()
+
+    if save_pdf == "y":
+        export_monthly_report_pdf(report, month, year)
+
+    pause()
+
+def log_history(asset_id, old_status, new_status, user = "", email = ""):
     if not os.path.exists(INVENTORY_FILE):
         return
     
@@ -225,19 +291,67 @@ def log_history(asset_id, old_status, new_status, user = ""):
     if "History" not in workbook.sheetnames:
         history_sheet = workbook.create_sheet("History")
 
-        history_sheet.append(["Timestamp", "Asset ID", "Old Status", "New Status", "User"])
+        history_sheet.append(["Timestamp", "Asset ID", "Old Status", "New Status", "User", "Email"])
 
     else:
         history_sheet = workbook["History"]
 
     history_sheet.append([
-        datetime.now().strftime("%Y-%m-%d%H:%M:%S"),
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         asset_id,
         old_status,
         new_status,
         user,
+        email
     ])
     workbook.save(INVENTORY_FILE)
+
+def export_monthly_report_pdf(report, month, year):
+    month_name = calendar.month_name[month]
+    pdf_path = os.path.join(REPORT_EXPORTS_FOLDER, f"{month_name}_{year}_report.pdf")
+
+    doc = SimpleDocTemplate(pdf_path)
+    styles = getSampleStyleSheet()
+    story = []
+
+    issued = (report['New Status'] == 'Issued Out').sum()
+    returned = (report['New Status'] == 'Returned').sum()
+    broken = (report['New Status'] == 'Broken').sum()
+    retired = (report['New Status'] == 'Retired').sum()
+
+    story.append(Paragraph(f"IT Asset Report - {month_name} {year}", styles["Title"]))
+    story.append(Spacer(1, 20))
+    story.append(Paragraph(
+        f"Generated: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+        styles["Normal"]
+    ))
+    story.append(Spacer(1, 20))
+
+    story.append(Paragraph(f"Total Actions: {len(report)}", styles["Normal"]))
+    story.append(Paragraph(f"Issued Out: {issued}", styles["Normal"]))
+    story.append(Paragraph(f"Returned: {returned}", styles["Normal"]))
+    story.append(Paragraph(f"Broken: {broken}", styles["Normal"]))
+    story.append(Paragraph(f"Retired: {retired}", styles["Normal"]))
+
+    story.append(Spacer(1, 20))
+    story.append(Paragraph("Detailed Activity", styles["Heading2"]))
+    story.append(Spacer(1, 10))
+
+    for _, row in report.iterrows():
+        line = (
+            f"Timestamp: {row['Timestamp']}|"
+            f"Asset ID: {row['Asset ID']}|"
+            f"Status: {row['Old Status']} -> {row['New Status']}|"
+            f"User: {row['User']}|"
+        )
+        story.append(Paragraph(line, styles["Normal"]))
+        story.append(Spacer(1, 8))
+
+    doc.build(story)
+
+    print(f"PDF saved to: {pdf_path}")
+
+
 
 
 def load_inventory():
@@ -289,16 +403,7 @@ def find_asset_match(inventory_df, asset):
     return None
 
 
-
-
-
-
-
 def update_inventory():
-
-    matches_found = 0
-    new_assets = 0
-
 
     # Load CSV source files
     scanned_df = pd.read_csv(SCANNED_FILE)
@@ -310,11 +415,6 @@ def update_inventory():
         ignore_index=True
     )
 
-    print("scanned:", len(scanned_df))
-    print("manual:", len(manual_df))
-    print("total to import:", len(import_df))
-
-    print("Unique Asset IDs in import:", import_df["Asset ID"].astype(str).str.strip().nunique())
 
     # Load existing inventory
     inventory_df = load_inventory()
@@ -335,16 +435,6 @@ def update_inventory():
                 inventory_df,
                 asset
             )
-
-        asset_id = str(asset.get("Asset ID", "")).strip()
-
-        if match_index is not None:
-
-            print(f"matched: {asset_id}")
-            matches_found += 1
-
-        else:
-            new_assets += 1
 
         # Existing asset found
         if match_index is not None:
@@ -396,19 +486,6 @@ def update_inventory():
     # Ensure Asset ID column exists
     if "Asset ID" not in inventory_df.columns:
         inventory_df["Asset ID"] = ""
-
-    print("inventory rows:", len(inventory_df))
-    print(f"Matches found: {matches_found}")
-    print(f"New assets added: {new_assets}")
-
-    import_ids = set(import_df["Asset ID"].astype(str))
-    inventory_ids = set(inventory_df["Asset ID"].astype(str))
-
-    missing = import_ids - inventory_ids
-
-    print("Missing IDs:")
-    print(sorted(missing))
-                     
 
     save_inventory(inventory_df)
 
@@ -776,11 +853,24 @@ def issue_out_asset(asset_id, person, location):
 
     save_inventory(df)
 
+    email = input("Enter user email for notification: ").strip()
+
+    send_email_asset_issue(
+        user_email=email,
+        user_name=person,
+        asset_id=asset_id,
+        asset_name=df.loc[match, "AssetName"].iloc[0],
+        asset_model=df.loc[match, "Model"].iloc[0],
+        asset_type=df.loc[match, "AssetType"].iloc[0],
+        shared_email="hulme1905@outlook.com"
+    )
+
     log_history(
         asset_id,
         old_status,
         "Issued Out",
-        person
+        person,
+        email
     )
 
     print(f"{asset_id} issued to {person}")
@@ -821,11 +911,23 @@ def return_asset(asset_id):
 
     save_inventory(df)
 
+    email = input("Enter user email for notification: ").strip()
+
+    send_email_asset_return(
+        user_email=email,
+        user_name=current_user,
+        asset_id=asset_id,
+        asset_name=df.loc[match, "AssetName"].iloc[0],
+        asset_model=df.loc[match, "Model"].iloc[0],
+        asset_type=df.loc[match, "AssetType"].iloc[0],
+        shared_email="hulme1905@outlook.com")
+
     log_history(
         asset_id, 
         old_status, 
         "Returned", 
-        current_user
+        current_user,
+        email
     )
 
     print(f"{asset_id} returned to IT Storage")
@@ -928,8 +1030,6 @@ def generate_reports():
 
     if df is None:
         return
-
-    from openpyxl import Workbook
 
     if os.path.exists(REPORT_WORKBOOK):
 
@@ -1179,14 +1279,14 @@ def menu():
         show_dashboard()
 
         print("[1.] Update Inventory")
-        print("[2.] Generate Reports")
-        print("[3.] Search Asset")
-        print("[4.] Issue Asset")
-        print("[5.] Return Asset")
-        print("[6.] Mark Asset Broken")
-        print("[7.] Retire Asset")
-        print("[8.] View Asset Logs")
-        print("[9.] Repair Asset")
+        print("[2.] Search Asset")
+        print("[3.] Issue Asset")
+        print("[4.] Return Asset")
+        print("[5.] Mark Asset Broken")
+        print("[6.] Retire Asset")
+        print("[7.] View Asset Logs")
+        print("[8.] Repair Asset")
+        print("[9.] Reports Menu")
         print("[10.] Exit")
         print("=" * 50)
 
@@ -1198,13 +1298,10 @@ def menu():
 
         elif choice == "2":
 
-            generate_reports()
-
-        elif choice == "3":
-
             search_menu()
 
-        elif choice == "4":
+
+        elif choice == "3":
 
             asset_id = input("Asset ID: ")
             person = input("User: ")
@@ -1216,35 +1313,38 @@ def menu():
                 location
             )
 
-        elif choice == "5":
+        elif choice == "4":
 
             asset_id = input("Asset ID: ")
             return_asset(asset_id)
 
-        elif choice == "6":
+        elif choice == "5":
 
             asset_id = input("Asset ID: ")
             mark_asset_broken(asset_id)
 
-        elif choice == "7":
+        elif choice == "6":
 
             asset_id = input("Asset ID: ")
             retire_asset(asset_id)
 
-        elif choice == "8":
+        elif choice == "7":
 
             asset_logs_menu()
 
-        elif choice == "9":
+        elif choice == "8":
 
             asset_id = input("Asset ID: ")
             repair_asset(asset_id)
+
+        elif choice == "9":
+
+            report_menu()
 
         elif choice == "10":
 
             print("Goodbye")
             break
-
         else:
 
             print("Invalid option")
@@ -1333,7 +1433,6 @@ def asset_logs_menu():
     while True:
         clear_screen()
         show_dashboard()
-
         print("=" * 50)
         print("\n===== View Asset Logs =====")
         print("[1.] Add log entry")
@@ -1357,6 +1456,29 @@ def asset_logs_menu():
         else:
             print("Invalid option")
             pause()
+
+def report_menu():
+    while True:
+        clear_screen()
+        print("=" * 50)
+        print("\n===== Reports Menu =====")
+        print("[1.] Generate Reports")
+        print("[2.] Monthly Summary Report")
+        print("[3.] Back")
+        print("=" * 50)
+
+        choice = input("\nSelect option: ")
+
+        if choice == "1":
+            generate_reports()
+        elif choice == "2":
+            monthly_summary_report()
+        elif choice == "3":
+            break
+        else:
+            print("Invalid option")
+            pause()
+
 def pause():
     input("\nPress Enter to continue...")
 
