@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import reportlab
 import win32com.client as win32
 
 from openpyxl import load_workbook, Workbook
@@ -7,11 +8,13 @@ from datetime import datetime
 from openpyxl.utils import get_column_letter
 
 import calendar
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 
 
-VERSION = "1.6"
+VERSION = "1.7"
 
 # =========================
 # FOLDER SETUP
@@ -20,6 +23,7 @@ VERSION = "1.6"
 REPORTS_FOLDER = "reports"
 DATA_FOLDER = "data"
 REPORT_EXPORTS_FOLDER = "reports exports"
+KIT_RELEASE_FORMS_FOLDER = "release_forms"
 
 # CSV reports from PowerShell app
 SCANNED_FILE = os.path.join(REPORTS_FOLDER, "scanned_assets.csv")
@@ -33,6 +37,7 @@ REPORT_WORKBOOK = os.path.join(REPORTS_FOLDER, "asset_reports.xlsx")
 os.makedirs(REPORTS_FOLDER, exist_ok=True)
 os.makedirs(DATA_FOLDER, exist_ok=True)
 os.makedirs(REPORT_EXPORTS_FOLDER, exist_ok=True)
+os.makedirs(KIT_RELEASE_FORMS_FOLDER, exist_ok=True)
 
 # =========================
 # VALID STATUSES
@@ -46,6 +51,72 @@ VALID_STATUSES = {
     "Retired"
 }
 
+def clean_filename(text):
+    """Clean text to be used as a filename."""
+    invalid_chars = '<>:"/\\|?*'
+    for char in invalid_chars:
+        text = text.replace(char, "")
+    return text.strip()
+
+def generate_release_form(asset_row, issued_by="IT Department"):
+
+    asset_id = asset_row["Asset ID"]
+    asset_name = asset_row["AssetName"]
+    user = asset_row["User"]
+    issue_date = asset_row["Date"]
+    asset_type = asset_row["AssetType"]
+    model = asset_row["Model"]
+    serial = asset_row["SerialNumber"]
+    comments = asset_row["Comments"]
+    
+
+    filename = f"{KIT_RELEASE_FORMS_FOLDER}/"f"Kit Release Form-{clean_filename(user)}-{clean_filename(asset_name)}-{clean_filename(model)}-{asset_id}-{clean_filename(issue_date)}.pdf"
+
+    doc = SimpleDocTemplate(filename, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("IT Equipment Release Form", styles["Title"]))
+    story.append(Spacer(1, 20))
+
+    details = [
+        ["Asset ID", str(asset_id)],
+        ["Item", str(asset_type)],
+        ["Description", str(asset_name)],
+        ["Model Number", str(model)],
+        ["Serial Number", str(serial)],
+        ["Issued To", str(user)],
+        ["Issued By", str(issued_by)],
+        ["Issued On", str(issue_date)],
+        ["Comments", str(comments)],
+    ]
+
+    table = Table(details, colWidths=[140, 300])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+
+    story.append(table)
+    story.append(Spacer(1, 40))
+
+    agreement = """
+    I confirm that I have received the equipment listed above in good condition
+    and accept responsibility for its care and return. I understand that I am responsible for any loss or damage to the equipment while it is in my possession.
+    """
+
+    story.append(Paragraph(agreement, styles["BodyText"]))
+    story.append(Spacer(1, 50))
+
+    story.append(Paragraph("Employee Signature: ____________________", styles["BodyText"]))
+    story.append(Spacer(1, 20))
+    story.append(Paragraph("Date: ____________________", styles["BodyText"]))
+
+    doc.build(story)
+
+    return filename
+
 
 def send_email_asset_issue(user_email, user_name, asset_id, asset_name, asset_model, shared_email, asset_type):
     outlook = win32.Dispatch('outlook.application')
@@ -53,7 +124,7 @@ def send_email_asset_issue(user_email, user_name, asset_id, asset_name, asset_mo
     mail.To = user_email
     mail.CC = shared_email
     mail.Subject = f"Asset Issued: {asset_type}, {asset_name} {asset_model}"
-    mail.Body = f"Hi {user_name},\n\nYou have been issued the following asset:\n\nAsset ID: {asset_id}\nAsset Name: {asset_name}\nAsset Model: {asset_model}\nAsset Type: {asset_type}\n\nPlease contact IT if you have any issues.\n\nKind regards,\nIT Department"
+    mail.Body = f"Hi {user_name},\n\nYou have been issued the following asset:\n\nItem: {asset_name} {asset_model}\nAsset Type: {asset_type}\n\nPlease contact IT if you have any issues.\n\nKind regards,\nIT Department"
     mail.Send()
 
 def send_email_asset_return(user_email, user_name, asset_id, asset_name, asset_model, shared_email, asset_type):
@@ -62,7 +133,7 @@ def send_email_asset_return(user_email, user_name, asset_id, asset_name, asset_m
     mail.To = user_email
     mail.CC = shared_email
     mail.Subject = f"Asset Returned: {asset_type}, {asset_name} {asset_model}"
-    mail.Body = f"Hi {user_name},\n\nYou have returned the following asset:\n\nAsset ID: {asset_id}\nAsset Name: {asset_name}\nAsset Model: {asset_model}\nAsset Type: {asset_type}\n\nThank you for returning the asset.\n\nKind regards,\nIT Department"
+    mail.Body = f"Hi {user_name},\n\nYou have returned the following asset:\n\nName: {asset_name} {asset_model}\nAsset Type: {asset_type}\n\nThank you for returning the asset.\n\nKind regards,\nIT Department"
     mail.Send()
 # =========================
 # SAVE / LOAD FUNCTIONS
@@ -834,8 +905,9 @@ def issue_out_asset(asset_id, person, location):
 
     current_status = str(df.loc[match, "Status"].iloc[0]).strip()
     current_user = str(df.loc[match, "User"].iloc[0]).strip()
+    current_location = str(df.loc[match, "Location"].iloc[0]).strip()
 
-    if current_user and current_user.lower() != "nan":
+    if (current_user and current_user.lower() != "nan" and current_location != "IT Storage"):
         print(f"Asset already issued to {current_user}")
         pause()
         return
@@ -852,6 +924,10 @@ def issue_out_asset(asset_id, person, location):
     df.loc[match, "Location"] = location
 
     save_inventory(df)
+
+    asset = df.loc[match].iloc[0]
+    pdf_path = generate_release_form(asset, issued_by="IT Department")
+    print (f"Release form generated: {pdf_path}")
 
     email = input("Enter user email for notification: ").strip()
 
